@@ -1,32 +1,30 @@
 """
-AI Blog Generator with SEO Score
-=================================
-A Streamlit app that uses Google Gemini API to generate full SEO-optimized blogs.
-
-Setup:
-    1. Install dependencies:
-       pip install streamlit google-generativeai python-dotenv
-
-    2. Set your Gemini API key:
-       Option A - .env file:   GEMINI_API_KEY=your_key_here
-       Option B - Environment: export GEMINI_API_KEY=your_key_here
-       Option C - Enter it in the Streamlit sidebar at runtime
-
-    3. Run the app:
-       streamlit run app.py
+AI Blog Generator with SEO Score  ·  Powered by Groq
+=====================================================
+SETUP:
+  1.  pip install -r requirements.txt
+  2.  Create a .env file in the same folder:
+          GROQ_API_KEY=gsk_...your_key_here
+      OR export it in the terminal:
+          export GROQ_API_KEY=gsk_...your_key_here
+      OR paste it into the sidebar at runtime.
+  3.  streamlit run app.py
 """
 
+# ──────────────────────────────────────────────────────────────
+# IMPORTS
+# ──────────────────────────────────────────────────────────────
 import os
 import re
 import time
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 from dotenv import load_dotenv
 
-# ─────────────────────────────────────────────
-# 0.  CONFIGURATION & PAGE SETUP
-# ─────────────────────────────────────────────
-load_dotenv()  # Load .env file if present
+# ──────────────────────────────────────────────────────────────
+# 0.  BASIC CONFIGURATION
+# ──────────────────────────────────────────────────────────────
+load_dotenv()   # reads GROQ_API_KEY from .env if it exists
 
 st.set_page_config(
     page_title="AI Blog Generator with SEO Score",
@@ -34,232 +32,208 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Custom CSS for a clean, modern look ──────
+# ── Styling ───────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* Google Font */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;700&display=swap');
 
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+html, body, [class*="css"]          { font-family: 'Inter', sans-serif; }
+.hero-title                         { font-family:'Lora',serif; font-size:2.3rem;
+                                      font-weight:700; color:#111827; margin-bottom:0; }
+.hero-sub                           { color:#6b7280; font-size:.95rem; margin-top:.2rem; }
 
-    /* Hero title */
-    .hero-title {
-        font-family: 'Merriweather', serif;
-        font-size: 2.4rem;
-        font-weight: 700;
-        color: #1a1a2e;
-        margin-bottom: 0;
-    }
-    .hero-sub {
-        color: #6b7280;
-        font-size: 1rem;
-        margin-top: 0.25rem;
-    }
+.step-badge { display:inline-block; background:#dbeafe; color:#1d4ed8;
+              border-radius:999px; padding:2px 14px; font-size:.75rem;
+              font-weight:600; margin-bottom:6px; letter-spacing:.04em; }
 
-    /* Step badges */
-    .step-badge {
-        display: inline-block;
-        background: #e0e7ff;
-        color: #3730a3;
-        border-radius: 999px;
-        padding: 2px 14px;
-        font-size: 0.78rem;
-        font-weight: 600;
-        margin-bottom: 8px;
-        letter-spacing: 0.04em;
-    }
+.model-pill { display:inline-block; background:#dcfce7; color:#15803d;
+              border-radius:999px; padding:2px 12px; font-size:.78rem; font-weight:600; }
 
-    /* SEO Score card */
-    .seo-card {
-        border-radius: 16px;
-        padding: 1.5rem 2rem;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
-    .seo-card.great  { background: #d1fae5; border: 2px solid #10b981; }
-    .seo-card.good   { background: #fef3c7; border: 2px solid #f59e0b; }
-    .seo-card.poor   { background: #fee2e2; border: 2px solid #ef4444; }
-    .seo-score-num {
-        font-size: 4rem;
-        font-weight: 700;
-        line-height: 1;
-    }
-    .seo-label { font-size: 1rem; font-weight: 500; margin-top: 4px; }
+.seo-card   { border-radius:14px; padding:1.4rem 1.8rem;
+              text-align:center; margin-bottom:1rem; }
+.seo-card.great { background:#d1fae5; border:2px solid #10b981; }
+.seo-card.good  { background:#fef3c7; border:2px solid #f59e0b; }
+.seo-card.poor  { background:#fee2e2; border:2px solid #ef4444; }
+.seo-score-num  { font-size:3.8rem; font-weight:700; line-height:1; }
+.seo-label      { font-size:.95rem; font-weight:500; margin-top:4px; }
 
-    /* Individual score row */
-    .score-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 6px 0;
-        border-bottom: 1px solid #f3f4f6;
-        font-size: 0.9rem;
-    }
-    .score-row:last-child { border-bottom: none; }
-    .score-pill {
-        background: #e0e7ff;
-        color: #3730a3;
-        border-radius: 999px;
-        padding: 1px 10px;
-        font-size: 0.78rem;
-        font-weight: 600;
-    }
+.score-row { display:flex; justify-content:space-between; align-items:center;
+             padding:6px 0; border-bottom:1px solid #f3f4f6; font-size:.88rem; }
+.score-row:last-child { border-bottom:none; }
+.score-pill { background:#e0e7ff; color:#3730a3; border-radius:999px;
+              padding:1px 10px; font-size:.75rem; font-weight:600; }
 
-    /* Blog content area */
-    .blog-box {
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 2rem;
-        font-family: 'Merriweather', serif;
-        font-size: 0.95rem;
-        line-height: 1.9;
-        color: #1f2937;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 600px;
-        overflow-y: auto;
-    }
-
-    /* Divider */
-    hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
+hr { border:none; border-top:1px solid #e5e7eb; margin:1.2rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────
-# 1.  GEMINI API INITIALISATION
-# ─────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# 1.  GROQ MODEL CONFIGURATION
+# ──────────────────────────────────────────────────────────────
 
-def init_gemini(api_key: str) -> genai.GenerativeModel | None:
+# Available Groq models — fast inference on open-source LLMs
+MODEL_OPTIONS = [
+    "llama-3.3-70b-versatile",     # best quality
+    "llama-3.1-8b-instant",        # fast & lightweight
+    "mixtral-8x7b-32768",          # Mixtral MoE
+    "gemma2-9b-it",                # Google Gemma 2
+]
+
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
+
+
+def init_groq(api_key: str, model_name: str):
     """
-    Configure the Gemini client and return a GenerativeModel instance.
-    Returns None and shows an error if the key is missing or invalid.
+    Create a Groq client and validate the API key.
+    Returns (client, model_name) or (None, "").
     """
-    if not api_key:
-        st.error("⚠️  No API key provided. Enter your Gemini API key in the sidebar.")
-        return None
+    if not api_key or not api_key.strip():
+        st.error("⚠️  No API key provided. Add it in the sidebar.")
+        return None, ""
+
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        return model
+        client = Groq(api_key=api_key.strip())
+        # Quick validation — list models to verify key works
+        client.models.list()
+        return client, model_name
     except Exception as exc:
-        st.error(f"❌  Failed to initialise Gemini: {exc}")
-        return None
+        st.error(f"❌  Groq init failed: {exc}")
+        return None, ""
 
 
-def call_gemini(model: genai.GenerativeModel, prompt: str) -> str:
+# ──────────────────────────────────────────────────────────────
+# 2.  CORE API CALL WRAPPER
+# ──────────────────────────────────────────────────────────────
+
+def call_groq(client: Groq, model: str, prompt: str, retries: int = 2) -> str:
     """
-    Send a prompt to Gemini and return the text response.
-    Raises RuntimeError on API failure so callers can surface it clearly.
+    Send a prompt to Groq and return the text.
+    Retries up to `retries` times on transient errors.
+    Raises RuntimeError on persistent failure.
     """
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as exc:
-        raise RuntimeError(f"Gemini API error: {exc}") from exc
+    last_error = None
+    for attempt in range(retries + 1):
+        try:
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "You are a professional blog writer and SEO expert."},
+                    {"role": "user", "content": prompt},
+                ],
+                model=model,
+                temperature=0.7,
+                max_tokens=4096,
+            )
+            text = chat_completion.choices[0].message.content
+            if not text:
+                raise RuntimeError("Empty response from Groq.")
+            return text.strip()
+        except Exception as exc:
+            last_error = exc
+            if attempt < retries:
+                time.sleep(2 ** attempt)   # exponential back-off: 1s, 2s
+    raise RuntimeError(f"Groq API error after {retries+1} attempts: {last_error}")
 
 
-# ─────────────────────────────────────────────
-# 2.  BLOG GENERATION PIPELINE — STEP FUNCTIONS
-# ─────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# 3.  BLOG GENERATION PIPELINE
+# ──────────────────────────────────────────────────────────────
 
-def generate_outline(model: genai.GenerativeModel, keyword: str) -> str:
-    """
-    Step 1 — Ask Gemini to produce a structured blog outline (headings).
-    Returns the raw outline text.
-    """
+def generate_outline(client: Groq, model: str, keyword: str) -> str:
+    """Step 1 — Generate a structured blog outline with title + numbered headings."""
     prompt = f"""
 You are an expert content strategist and SEO writer.
 
 Create a detailed blog outline for the keyword: "{keyword}"
 
-Format the outline exactly like this:
-Title: [Compelling SEO-optimised blog title containing the keyword]
+Format EXACTLY like this — no deviations:
+Title: [Compelling SEO-optimised blog title that naturally contains the keyword]
 
 1. Introduction
-2. [Section heading]
-3. [Section heading]
-4. [Section heading]
-5. [Section heading]
-6. [Section heading]
+2. [Specific section heading]
+3. [Specific section heading]
+4. [Specific section heading]
+5. [Specific section heading]
+6. [Specific section heading]
 7. Conclusion
 
 Rules:
-- Include the exact keyword naturally in the title.
-- Provide 5–7 meaningful section headings (numbered 1–7).
-- Make headings specific and informative, not generic.
-- Output ONLY the outline — no extra commentary.
+- The keyword "{keyword}" MUST appear in the title.
+- Provide exactly 7 numbered headings (1-7).
+- Make headings specific and descriptive, not generic.
+- Output ONLY the outline. No explanations, no preamble.
 """
-    return call_gemini(model, prompt)
+    return call_groq(client, model, prompt)
 
 
-def expand_section(model: genai.GenerativeModel, keyword: str, title: str, heading: str) -> str:
-    """
-    Step 2 — Expand a single section heading into detailed paragraph content.
-    Returns the expanded text for that section.
-    """
+def expand_section(client: Groq, model: str, keyword: str, title: str, heading: str) -> str:
+    """Step 2 — Write 2-3 paragraphs for a single section heading."""
     prompt = f"""
 You are a professional blog writer specialising in SEO content.
 
-Blog title : "{title}"
-Target keyword : "{keyword}"
-Section heading: "{heading}"
+Blog title  : "{title}"
+Keyword     : "{keyword}"
+This section: "{heading}"
 
-Write 2–3 detailed, engaging paragraphs for this section.
+Write 2-3 detailed, engaging paragraphs for this section.
 
 Rules:
-- Use the keyword "{keyword}" naturally at least once.
-- Write in a clear, friendly, informative tone.
-- Do NOT use bullet points — write in flowing prose.
-- Do NOT repeat the section heading in your answer.
-- Output ONLY the paragraphs, no extra labels.
+- Use the keyword "{keyword}" at least once, naturally.
+- Friendly, clear, informative tone — no jargon.
+- Flowing prose only — NO bullet points.
+- Do NOT repeat the section heading at the start.
+- Output ONLY the paragraphs.
 """
-    return call_gemini(model, prompt)
+    return call_groq(client, model, prompt)
 
 
-def generate_faq(model: genai.GenerativeModel, keyword: str, title: str) -> str:
-    """
-    Step 3 — Generate a structured FAQ section for the blog.
-    Returns the FAQ block as a string.
-    """
+def generate_faq(client: Groq, model: str, keyword: str, title: str) -> str:
+    """Step 3 — Generate an SEO-friendly FAQ block (5 Q&As)."""
     prompt = f"""
 You are an SEO content expert.
 
-Blog title : "{title}"
-Target keyword : "{keyword}"
+Blog title: "{title}"
+Keyword   : "{keyword}"
 
-Generate a FAQ section with exactly 5 questions and detailed answers related to the keyword.
+Write a FAQ section with exactly 5 questions and answers.
 
-Format:
+Format EXACTLY like this:
 ## Frequently Asked Questions (FAQ)
 
-**Q1: [Question]**
-A: [Detailed answer in 2–3 sentences]
+**Q1: [Question containing the keyword]**
+A: [2-3 sentence informative answer]
 
 **Q2: [Question]**
-A: [Detailed answer]
+A: [Answer]
 
-...and so on up to Q5.
+**Q3: [Question]**
+A: [Answer]
+
+**Q4: [Question]**
+A: [Answer]
+
+**Q5: [Question related to the keyword]**
+A: [Answer]
 
 Rules:
-- Use the keyword "{keyword}" in at least 2 questions.
-- Answers must be accurate, informative, and helpful.
-- Output ONLY the FAQ block — no extra text.
+- Use "{keyword}" in at least Q1 and Q5.
+- Answers must be accurate and genuinely helpful.
+- Output ONLY the FAQ block — no preamble.
 """
-    return call_gemini(model, prompt)
+    return call_groq(client, model, prompt)
 
 
-def assemble_blog(outline: str, sections: list[dict], faq: str) -> str:
+def assemble_blog(outline: str, sections: list, faq: str) -> str:
     """
-    Step 4 — Combine outline title, expanded sections, and FAQ into one final blog.
-    Returns the complete blog string.
+    Step 4 — Combine outline title, expanded section content, and FAQ
+    into a single, well-formatted markdown blog post.
     """
-    # Extract the title line from the outline
-    title_line = ""
+    # Extract title from outline
+    blog_title = "Blog Post"
     for line in outline.splitlines():
-        if line.lower().startswith("title:"):
-            title_line = line.replace("Title:", "").replace("title:", "").strip()
+        stripped = line.strip()
+        if stripped.lower().startswith("title:"):
+            blog_title = stripped.split(":", 1)[1].strip()
             break
 
     # Extract numbered headings from outline
@@ -269,299 +243,319 @@ def assemble_blog(outline: str, sections: list[dict], faq: str) -> str:
         if re.match(r"^\d+\.", line.strip())
     ]
 
-    # Build the blog
-    blog_parts = [f"# {title_line}\n"]
-
+    # Build the post
+    parts = [f"# {blog_title}\n"]
     for i, section in enumerate(sections):
-        heading = heading_lines[i] if i < len(heading_lines) else section["heading"]
-        # Remove leading number+dot from heading for display
-        clean_heading = re.sub(r"^\d+\.\s*", "", heading)
-        blog_parts.append(f"\n## {clean_heading}\n")
-        blog_parts.append(section["content"])
+        raw_heading = heading_lines[i] if i < len(heading_lines) else section["heading"]
+        clean_heading = re.sub(r"^\d+\.\s*", "", raw_heading)
+        parts.append(f"\n## {clean_heading}\n")
+        parts.append(section["content"])
 
-    blog_parts.append(f"\n\n{faq}")
-
-    return "\n".join(blog_parts)
+    parts.append(f"\n\n{faq}")
+    return "\n".join(parts)
 
 
-# ─────────────────────────────────────────────
-# 3.  SEO SCORING SYSTEM
-# ─────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# 4.  SEO SCORING ENGINE
+# ──────────────────────────────────────────────────────────────
 
 def calculate_seo_score(blog_text: str, keyword: str) -> dict:
     """
-    Evaluate the blog against 6 SEO criteria and return a score breakdown dict.
-
-    Criteria                        Max points
-    ─────────────────────────────── ──────────
-    Keyword in title                    10
-    Keyword frequency in body           20
-    Use of headings (## markers)        20
-    FAQ section present                 15
-    Content length > 800 words          20
-    Readability / basic formatting      15
-    ─────────────────────────────── ──────────
-    Total                              100
+    Score the generated blog on 6 SEO criteria. Returns a dict with:
+      - total      (int 0-100)
+      - breakdown  (dict of criterion -> {earned, max, detail})
+      - word_count (int)
     """
-    scores = {}
+    scores   = {}
     kw_lower = keyword.lower()
-    text_lower = blog_text.lower()
-    lines = blog_text.splitlines()
+    txt_low  = blog_text.lower()
+    lines    = blog_text.splitlines()
 
-    # ── Criterion 1: Keyword in title (10 pts) ──────────────────
+    # 1. Keyword in title (10 pts)
     title_line = next((l for l in lines if l.startswith("# ")), "")
+    kw_in_title = kw_lower in title_line.lower()
     scores["Keyword in Title"] = {
-        "earned": 10 if kw_lower in title_line.lower() else 0,
+        "earned": 10 if kw_in_title else 0,
         "max": 10,
-        "detail": "Keyword found in H1 title" if kw_lower in title_line.lower()
-                  else "Keyword missing from H1 title",
+        "detail": "Found in H1 title" if kw_in_title else "Not in H1 title",
     }
 
-    # ── Criterion 2: Keyword frequency (20 pts) ─────────────────
-    freq = text_lower.count(kw_lower)
+    # 2. Keyword frequency / density (20 pts)
     word_count = len(blog_text.split())
-    density = (freq / word_count * 100) if word_count else 0
-    # Target density: 1–3 % = full marks; 0.5–1 % or 3–5 % = half marks
-    if 1.0 <= density <= 3.0:
-        kw_pts = 20
-        kw_detail = f"Keyword density {density:.1f}% — ideal range (1–3%)"
-    elif 0.5 <= density < 1.0 or 3.0 < density <= 5.0:
-        kw_pts = 12
-        kw_detail = f"Keyword density {density:.1f}% — acceptable but not optimal"
-    elif freq > 0:
-        kw_pts = 5
-        kw_detail = f"Keyword appears only {freq} time(s) — too sparse"
-    else:
-        kw_pts = 0
-        kw_detail = "Keyword not found in content"
-    scores["Keyword Frequency"] = {"earned": kw_pts, "max": 20, "detail": kw_detail}
+    freq       = txt_low.count(kw_lower)
+    density    = (freq / word_count * 100) if word_count else 0
 
-    # ── Criterion 3: Headings (## markers) (20 pts) ─────────────
+    if   1.0 <= density <= 3.0:  kw_pts, kw_msg = 20, f"Density {density:.1f}% — ideal (1-3%)"
+    elif 0.5 <= density <  1.0:  kw_pts, kw_msg = 12, f"Density {density:.1f}% — slightly low"
+    elif 3.0 <  density <= 5.0:  kw_pts, kw_msg = 12, f"Density {density:.1f}% — slightly high"
+    elif freq > 0:               kw_pts, kw_msg =  5, f"Only {freq} occurrence(s) — too sparse"
+    else:                        kw_pts, kw_msg =  0, "Keyword not found in body"
+
+    scores["Keyword Frequency"] = {"earned": kw_pts, "max": 20, "detail": kw_msg}
+
+    # 3. Headings (20 pts)
     h2_count = sum(1 for l in lines if l.startswith("## "))
-    if h2_count >= 5:
-        h_pts = 20
-    elif h2_count >= 3:
-        h_pts = 13
-    elif h2_count >= 1:
-        h_pts = 7
-    else:
-        h_pts = 0
-    scores["Use of Headings"] = {
+    if   h2_count >= 5: h_pts = 20
+    elif h2_count >= 3: h_pts = 13
+    elif h2_count >= 1: h_pts =  7
+    else:               h_pts =  0
+
+    scores["Use of H2 Headings"] = {
         "earned": h_pts,
         "max": 20,
         "detail": f"{h2_count} H2 heading(s) found",
     }
 
-    # ── Criterion 4: FAQ presence (15 pts) ──────────────────────
-    has_faq = "faq" in text_lower or "frequently asked" in text_lower
-    faq_q_count = len(re.findall(r"\*\*Q\d+:", blog_text))
-    if has_faq and faq_q_count >= 4:
-        faq_pts = 15
-        faq_detail = f"FAQ section with {faq_q_count} questions"
-    elif has_faq:
-        faq_pts = 8
-        faq_detail = "FAQ section present but incomplete"
-    else:
-        faq_pts = 0
-        faq_detail = "No FAQ section detected"
-    scores["FAQ Section"] = {"earned": faq_pts, "max": 15, "detail": faq_detail}
+    # 4. FAQ section (15 pts)
+    has_faq  = "faq" in txt_low or "frequently asked" in txt_low
+    faq_qs   = len(re.findall(r"\*\*Q\d+:", blog_text))
+    if   has_faq and faq_qs >= 4: faq_pts, faq_msg = 15, f"FAQ with {faq_qs} questions"
+    elif has_faq:                  faq_pts, faq_msg =  8, f"FAQ present but only {faq_qs} question(s)"
+    else:                          faq_pts, faq_msg =  0, "No FAQ section detected"
 
-    # ── Criterion 5: Content length > 800 words (20 pts) ────────
-    if word_count >= 1500:
-        len_pts = 20
-    elif word_count >= 800:
-        len_pts = 14
-    elif word_count >= 400:
-        len_pts = 8
-    else:
-        len_pts = 0
-    scores["Content Length"] = {
-        "earned": len_pts,
-        "max": 20,
-        "detail": f"{word_count} words",
-    }
+    scores["FAQ Section"] = {"earned": faq_pts, "max": 15, "detail": faq_msg}
 
-    # ── Criterion 6: Readability / basic formatting (15 pts) ────
-    fmt_pts = 0
-    fmt_notes = []
-    # Has a title (H1)
+    # 5. Word count (20 pts)
+    if   word_count >= 1500: len_pts, len_msg = 20, f"{word_count} words — excellent"
+    elif word_count >=  800: len_pts, len_msg = 14, f"{word_count} words — good"
+    elif word_count >=  400: len_pts, len_msg =  8, f"{word_count} words — short"
+    else:                    len_pts, len_msg =  0, f"{word_count} words — too short"
+
+    scores["Content Length"] = {"earned": len_pts, "max": 20, "detail": len_msg}
+
+    # 6. Readability / formatting (15 pts)
+    fmt_pts, fmt_notes = 0, []
+
     if any(l.startswith("# ") for l in lines):
-        fmt_pts += 5
-        fmt_notes.append("H1 title ✓")
-    # Has bold text (**text**)
+        fmt_pts += 5; fmt_notes.append("H1 title")
+
     if "**" in blog_text:
-        fmt_pts += 5
-        fmt_notes.append("bold text ✓")
-    # Average paragraph length ≤ 150 words (readable chunks)
-    paragraphs = [p.strip() for p in blog_text.split("\n\n") if p.strip() and not p.startswith("#")]
-    if paragraphs:
-        avg_para_len = sum(len(p.split()) for p in paragraphs) / len(paragraphs)
-        if avg_para_len <= 150:
-            fmt_pts += 5
-            fmt_notes.append("paragraph length ✓")
+        fmt_pts += 5; fmt_notes.append("bold text")
+
+    paras = [p.strip() for p in blog_text.split("\n\n") if p.strip() and not p.startswith("#")]
+    if paras:
+        avg_len = sum(len(p.split()) for p in paras) / len(paras)
+        if avg_len <= 150:
+            fmt_pts += 5; fmt_notes.append("good paragraph length")
+
     scores["Readability / Formatting"] = {
         "earned": fmt_pts,
         "max": 15,
-        "detail": ", ".join(fmt_notes) if fmt_notes else "Poor formatting",
+        "detail": ", ".join(fmt_notes) or "Poor formatting",
     }
 
-    # ── Total ────────────────────────────────────────────────────
     total = sum(v["earned"] for v in scores.values())
     return {"total": total, "breakdown": scores, "word_count": word_count}
 
 
-# ─────────────────────────────────────────────
-# 4.  STREAMLIT UI
-# ─────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+# 5.  UI HELPERS
+# ──────────────────────────────────────────────────────────────
 
 def render_seo_score(result: dict) -> None:
-    """Render the SEO score card and breakdown table."""
+    """Render the coloured score card + per-criterion breakdown."""
     total = result["total"]
 
-    # Colour coding
-    if total >= 80:
-        card_cls, emoji, label = "great", "🟢", "Excellent SEO"
-    elif total >= 55:
-        card_cls, emoji, label = "good", "🟡", "Needs Improvement"
-    else:
-        card_cls, emoji, label = "poor", "🔴", "Poor SEO"
+    if   total >= 80: cls, emoji, label = "great", "🟢", "Excellent SEO"
+    elif total >= 55: cls, emoji, label = "good",  "🟡", "Needs Improvement"
+    else:             cls, emoji, label = "poor",  "🔴", "Poor SEO"
 
     st.markdown(f"""
-    <div class="seo-card {card_cls}">
-        <div class="seo-score-num">{total}<span style="font-size:1.5rem">/100</span></div>
+    <div class="seo-card {cls}">
+        <div class="seo-score-num">{total}<span style="font-size:1.4rem">/100</span></div>
         <div class="seo-label">{emoji} {label}</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Breakdown
     st.markdown("**Score Breakdown**")
     for criterion, data in result["breakdown"].items():
         st.markdown(f"""
         <div class="score-row">
-            <span>{criterion} <small style="color:#9ca3af">— {data['detail']}</small></span>
+            <span>{criterion}
+                <small style="color:#9ca3af"> — {data['detail']}</small>
+            </span>
             <span class="score-pill">{data['earned']}/{data['max']}</span>
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown(f"<small style='color:#9ca3af'>Word count: {result['word_count']}</small>",
-                unsafe_allow_html=True)
+    st.markdown(
+        f"<small style='color:#9ca3af'>Total word count: {result['word_count']}</small>",
+        unsafe_allow_html=True,
+    )
 
+
+def seo_tips(result: dict) -> None:
+    """Derive actionable improvement tips from the score breakdown."""
+    bd   = result["breakdown"]
+    tips = []
+
+    if bd["Keyword in Title"]["earned"] < 10:
+        tips.append("Add your keyword to the H1 title.")
+    if bd["Keyword Frequency"]["earned"] < 15:
+        tips.append("Use the keyword more naturally throughout the body.")
+    if bd["Use of H2 Headings"]["earned"] < 15:
+        tips.append("Add at least 5 H2 sub-headings.")
+    if bd["FAQ Section"]["earned"] < 15:
+        tips.append("Ensure the FAQ has at least 5 Q&A pairs.")
+    if bd["Content Length"]["earned"] < 14:
+        tips.append("Aim for 1500+ words for stronger ranking signals.")
+    if bd["Readability / Formatting"]["earned"] < 10:
+        tips.append("Add bold text and keep paragraphs under 150 words.")
+
+    if not tips:
+        st.success("🎉 Great job! Your blog is well-optimised.")
+    else:
+        st.markdown("**💡 Improvement Tips**")
+        for t in tips:
+            st.markdown(f"- {t}")
+
+
+# ──────────────────────────────────────────────────────────────
+# 6.  MAIN APP
+# ──────────────────────────────────────────────────────────────
 
 def main() -> None:
-    # ── Header ───────────────────────────────────────────────────
+
+    # Page header
     st.markdown('<div class="hero-title">✍️ AI Blog Generator with SEO Score</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-sub">Powered by Google Gemini · Generate full SEO-optimised blog posts in seconds</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero-sub">Powered by Groq · Lightning-fast inference on open-source LLMs</div>',
+        unsafe_allow_html=True,
+    )
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # ── Sidebar: API Key ─────────────────────────────────────────
+    # Sidebar
     with st.sidebar:
         st.header("⚙️ Configuration")
-        api_key_input = st.text_input(
-            "Gemini API Key",
-            value=os.getenv("GEMINI_API_KEY", ""),
-            type="password",
-            help="Get your key from https://aistudio.google.com/app/apikey",
-        )
-        st.caption("Your key is never stored — it lives only in your browser session.")
-        st.markdown("---")
-        st.markdown("**How to get a free API key:**")
-        st.markdown("1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)")
-        st.markdown("2. Sign in with Google")
-        st.markdown("3. Click **Create API Key**")
-        st.markdown("4. Paste it above ↑")
 
-    # ── Input Section ─────────────────────────────────────────────
-    col_input, col_spacer = st.columns([3, 1])
-    with col_input:
+        api_key_input = st.text_input(
+            "Groq API Key",
+            value=os.getenv("GROQ_API_KEY", ""),
+            type="password",
+            help="Get a free key at https://console.groq.com/keys",
+        )
+        st.caption("Key stays in your session — never stored.")
+
+        st.markdown("---")
+        selected_model = st.selectbox(
+            "🤖  Model",
+            options=MODEL_OPTIONS,
+            index=0,
+            help="Choose the Groq-hosted model to use for generation.",
+        )
+
+        st.markdown("---")
+        st.markdown("**Common Fixes**")
+        st.markdown("""
+- **401 Unauthorized** → check your API key
+- **Rate limit** → wait a moment, Groq has generous free-tier limits
+- **ModuleNotFoundError** → run `pip install -r requirements.txt`
+- **dotenv not loading** → `.env` must be in the same folder as `app.py`
+        """)
+
+    # Keyword input
+    col_kw, _ = st.columns([3, 1])
+    with col_kw:
         keyword = st.text_input(
             "🔑  Target Keyword",
             placeholder='e.g. "AI blog tool India"',
-            help="The primary keyword your blog should rank for.",
+            help="Primary keyword for SEO targeting.",
         )
 
-    generate_btn = st.button("🚀  Generate Blog", type="primary", use_container_width=False)
+    generate_btn = st.button("🚀  Generate Blog", type="primary")
 
-    # ── Generation Pipeline ───────────────────────────────────────
+    # Generation pipeline
     if generate_btn:
         if not keyword.strip():
-            st.warning("Please enter a keyword before generating.")
+            st.warning("Please enter a keyword first.")
             st.stop()
 
-        model = init_gemini(api_key_input)
-        if model is None:
+        # Init Groq client
+        client, model_name = init_groq(api_key_input, selected_model)
+        if client is None:
             st.stop()
 
-        # Containers for section-wise live display
-        status_bar     = st.empty()
-        outline_expdr  = st.expander("📋  Blog Outline", expanded=False)
-        sections_expdr = st.expander("📝  Expanded Sections", expanded=False)
-        faq_expdr      = st.expander("❓  FAQ Section", expanded=False)
+        # Show which model was selected
+        st.sidebar.markdown(
+            f"**Active model:** <span class='model-pill'>{model_name}</span>",
+            unsafe_allow_html=True,
+        )
+
+        # Live-update containers
+        status_bar      = st.empty()
+        outline_expdr   = st.expander("📋  Step 1 — Blog Outline",     expanded=False)
+        sections_expdr  = st.expander("📝  Step 2 — Expanded Sections", expanded=False)
+        faq_expdr       = st.expander("❓  Step 3 — FAQ Section",       expanded=False)
 
         try:
-            # ── Step 1: Outline ──────────────────────────────────
+            # Step 1: Outline
             status_bar.info("⏳  Step 1/4 — Generating blog outline…")
-            with st.spinner("Generating outline…"):
-                outline = generate_outline(model, keyword)
+            with st.spinner("Thinking about structure…"):
+                outline = generate_outline(client, model_name, keyword)
             with outline_expdr:
                 st.code(outline, language=None)
 
-            # Extract title from outline for subsequent steps
-            blog_title = keyword  # fallback
+            # Parse title + headings from outline
+            blog_title = keyword
             for line in outline.splitlines():
-                if line.lower().startswith("title:"):
+                if line.strip().lower().startswith("title:"):
                     blog_title = line.split(":", 1)[1].strip()
                     break
 
-            # Extract numbered headings
             headings = [
                 re.sub(r"^\d+\.\s*", "", l.strip())
                 for l in outline.splitlines()
                 if re.match(r"^\d+\.", l.strip())
             ]
 
-            # ── Step 2: Expand each section ─────────────────────
-            status_bar.info(f"⏳  Step 2/4 — Expanding {len(headings)} sections…")
+            # Step 2: Expand sections
+            status_bar.info(f"⏳  Step 2/4 — Writing {len(headings)} sections…")
             sections = []
             with sections_expdr:
-                for i, heading in enumerate(headings):
-                    st.markdown(f'<span class="step-badge">Section {i+1}/{len(headings)}</span>', unsafe_allow_html=True)
+                for i, heading in enumerate(headings, 1):
+                    st.markdown(
+                        f'<span class="step-badge">Section {i}/{len(headings)}</span>',
+                        unsafe_allow_html=True,
+                    )
                     st.markdown(f"**{heading}**")
                     with st.spinner(f"Writing '{heading}'…"):
-                        content = expand_section(model, keyword, blog_title, heading)
+                        content = expand_section(client, model_name, keyword, blog_title, heading)
                     st.write(content)
                     st.divider()
                     sections.append({"heading": heading, "content": content})
 
-            # ── Step 3: FAQ ──────────────────────────────────────
-            status_bar.info("⏳  Step 3/4 — Generating FAQ section…")
-            with st.spinner("Generating FAQ…"):
-                faq = generate_faq(model, keyword, blog_title)
+            # Step 3: FAQ
+            status_bar.info("⏳  Step 3/4 — Generating FAQ…")
+            with st.spinner("Creating FAQ…"):
+                faq = generate_faq(client, model_name, keyword, blog_title)
             with faq_expdr:
                 st.markdown(faq)
 
-            # ── Step 4: Assemble full blog ───────────────────────
+            # Step 4: Assemble
             status_bar.info("⏳  Step 4/4 — Assembling final blog…")
-            time.sleep(0.3)  # tiny pause for UX
+            time.sleep(0.2)
             final_blog = assemble_blog(outline, sections, faq)
-
-            # ── SEO Scoring ──────────────────────────────────────
             seo_result = calculate_seo_score(final_blog, keyword)
-
-            status_bar.success("✅  Blog generated successfully!")
+            status_bar.success(f"✅  Done! Blog generated using **{model_name}**")
 
         except RuntimeError as exc:
             status_bar.error(f"❌  {exc}")
+            st.markdown("""
+**Troubleshooting:**
+- Verify your API key in the sidebar
+- Make sure your Groq account is active
+- Check if you've hit the rate limit (wait a moment and retry)
+            """)
             st.stop()
 
-        # ── Output Layout ─────────────────────────────────────────
+        # Output
         st.markdown("---")
         col_blog, col_seo = st.columns([2, 1], gap="large")
 
         with col_blog:
             st.subheader("📄  Generated Blog")
-            st.markdown(f'<div class="blog-box">{final_blog}</div>', unsafe_allow_html=True)
+            st.markdown(final_blog)
 
-            # Download button
             st.download_button(
                 label="⬇️  Download Blog (.txt)",
                 data=final_blog,
@@ -572,42 +566,24 @@ def main() -> None:
         with col_seo:
             st.subheader("📊  SEO Score")
             render_seo_score(seo_result)
-
-            # Tips
             st.markdown("---")
-            st.markdown("**💡 Quick Tips**")
-            tips = []
-            bd = seo_result["breakdown"]
-            if bd["Keyword in Title"]["earned"] < 10:
-                tips.append("Add the keyword to your title.")
-            if bd["Keyword Frequency"]["earned"] < 15:
-                tips.append("Use the keyword more naturally throughout.")
-            if bd["Use of Headings"]["earned"] < 15:
-                tips.append("Add more H2/H3 subheadings.")
-            if bd["FAQ Section"]["earned"] < 15:
-                tips.append("Expand FAQ to at least 5 Q&As.")
-            if bd["Content Length"]["earned"] < 15:
-                tips.append("Aim for 1 500+ words for best ranking.")
-            if not tips:
-                tips.append("Great job! Your blog is well-optimised. 🎉")
-            for t in tips:
-                st.markdown(f"- {t}")
+            seo_tips(seo_result)
 
-    # ── Footer hint when idle ─────────────────────────────────────
     else:
-        st.info("👆  Enter a keyword and click **Generate Blog** to get started.")
+        # Idle state
+        st.info("👆  Enter a keyword and click **Generate Blog** to start.")
         st.markdown("""
-        **What this tool does:**
-        1. 📋  Generates a structured blog outline from your keyword
-        2. ✍️  Expands each section into full paragraphs
-        3. ❓  Appends an SEO-friendly FAQ section
-        4. 📊  Scores your blog on 6 SEO criteria (0–100)
-        5. ⬇️  Lets you download the final article
+**Pipeline overview:**
+1. 📋  **Outline** — title + 7 structured headings
+2. ✍️  **Sections** — 2-3 paragraphs per heading
+3. ❓  **FAQ** — 5 keyword-rich Q&As
+4. 📊  **SEO Score** — 6-criterion audit (0-100)
+5. ⬇️  **Download** — full blog as `.txt`
         """)
 
 
-# ─────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 # ENTRY POINT
-# ─────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     main()
