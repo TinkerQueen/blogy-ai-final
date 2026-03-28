@@ -14,13 +14,13 @@ export function Footer() {
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
           
           <h3 className="text-2xl md:text-3xl font-bold text-white mb-3 font-serif relative z-10">
-            Built for Blogy × DTU Consulting Group
+            Built for Blogy
           </h3>
           <p className="text-indigo-200/80 mb-6 relative z-10">
-            Bizmark'26 Hackathon Prototype. Live demo available. 7-step pipeline stress-tested. GEO-optimized for India.
+            AI-powered blog automation platform with a 7-step SEO pipeline — generating high-ranking, structured content in seconds.
           </p>
           <Button variant="outline" className="border-indigo-500/30 text-indigo-300 hover:text-white hover:bg-indigo-500/20 relative z-10">
-            View Architecture Deck →
+            View Architecture →
           </Button>
         </div>
 
