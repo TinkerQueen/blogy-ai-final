@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=C:\Users\acer\OneDrive\Desktop\dtu project\DTU-project\venv
+set VIRTUAL_ENV=D:\Hackthon\blogy-ai-backend\venv
 
 if not defined PROMPT set PROMPT=$P$G
 
