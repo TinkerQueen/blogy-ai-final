@@ -1,4 +1,3 @@
-import React from 'react';
 import { Play, TrendingUp, Search, PenTool, BarChart3, ChevronDown } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { ParticleTextEffect } from '../components/ui/particle-text-effect';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Target, Zap, LayoutTemplate, Activity, Link as LinkIcon, Layers } from 'lucide-react';
 import { Card } from '../components/ui/card';
 

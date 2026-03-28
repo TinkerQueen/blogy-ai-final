@@ -7,7 +7,7 @@ import { ScrollArea } from '../components/ui/scroll-area';
 import { CheckCircle2, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
-const API_BASE_URL = "http://localhost:8000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
 
 export function DemoSection() {
   const [appState, setAppState] = useState<'idle' | 'generating' | 'complete'>('idle');
